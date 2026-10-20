@@ -42,7 +42,16 @@
         {
           "cameraPermission": "Bite uses the camera to photograph your meals."
         }
-      ]
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Bite uses the camera to photograph meals and scan barcodes.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      "expo-notifications"
     ],
     "scheme": "bite",
     "backgroundColor": "#E9ECE8",

@@ -25,14 +25,16 @@ npm run build:apk      # EAS cloud build → download link for an .apk
 ```
 src/
   app/                 routes (expo-router)
-    _layout.tsx        fonts, DB migrations, pending-retry
+    _layout.tsx        fonts, DB migrations, pending-retry (on open + on foreground)
     (tabs)/index.tsx   Today — readout, scale tape, macros, meals
-    (tabs)/progress    7-day bars, averages, weight
-    (tabs)/settings    targets, Gemini key/model, backup
+    (tabs)/progress    7-day bars, averages, weight + smoothed trend
+    (tabs)/settings    targets, Gemini key/model, daily reminder, backup
     capture.tsx        camera → hint → analyze
-    meal/[id].tsx      review/edit items, retry, delete
+    add.tsx            describe a meal in words, scan a barcode, favorites, log again
+    scan.tsx           barcode → Open Food Facts → meal
+    meal/[id].tsx      review/edit items, retry, favorite, log again, delete
   db/                  Drizzle schema, client, live queries + writes
-  lib/                 gemini, photos, analyze, backup, dates, nutrition, settings
+  lib/                 gemini, photos, analyze, barcode, reminder, backup, dates, nutrition, settings
   components/          ScaleTape, MacroLine, MealRow, Button
   theme.ts             colors, fonts, type scale
 drizzle/               generated migrations

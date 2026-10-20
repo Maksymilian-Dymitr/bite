@@ -11,7 +11,11 @@ export function MealRow({ meal }: { meal: MealWithItems }) {
   const names = meal.items.map((i) => i.name).join(", ");
   const subtitle =
     meal.status === "pending"
-      ? "Reading your plate…"
+      ? meal.error
+        ? "Not analyzed yet — retries when you're online"
+        : meal.photoPath
+          ? "Reading your plate…"
+          : "Reading your description…"
       : meal.status === "failed"
         ? "Couldn't analyze — tap to retry"
         : names || "No items";

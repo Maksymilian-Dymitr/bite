@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { setGoal, useGoal } from "@/db/queries";
 import { DEFAULT_MODEL, getApiKey, getModel, setApiKey, setModel } from "@/lib/settings";
 import { exportBackup, importBackup } from "@/lib/backup";
+import { formatTime, getReminder, parseTime, setReminder } from "@/lib/reminder";
 import { Button } from "@/components/Button";
 import { color, font, space, type } from "@/theme";
 
@@ -18,6 +19,7 @@ export default function Settings() {
         <Text style={type.title}>Settings</Text>
         <Targets />
         <Gemini />
+        <Reminder />
         <Backup />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -60,10 +62,12 @@ function Targets() {
   const [v, setV] = useState({ kcal: "", protein: "", carbs: "", fat: "" });
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    if (goal)
-      setV({ kcal: String(goal.kcal), protein: String(goal.protein), carbs: String(goal.carbs), fat: String(goal.fat) });
-  }, [goal?.id]);
+  // Seed the form whenever a (new) goal loads — adjusted during render rather than in an effect.
+  const [seededId, setSeededId] = useState<number>();
+  if (goal && goal.id !== seededId) {
+    setSeededId(goal.id);
+    setV({ kcal: String(goal.kcal), protein: String(goal.protein), carbs: String(goal.carbs), fat: String(goal.fat) });
+  }
 
   const nums = { kcal: Number(v.kcal), protein: Number(v.protein), carbs: Number(v.carbs), fat: Number(v.fat) };
   const valid = Object.values(nums).every((n) => isFinite(n) && n >= 0) && nums.kcal > 0;
@@ -141,6 +145,60 @@ function Gemini() {
           Alert.alert("Saved");
         }}
       />
+    </Section>
+  );
+}
+
+function Reminder() {
+  const [active, setActive] = useState<string | null>(null);
+  const [time, setTime] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    getReminder().then((t) => {
+      if (!t) return;
+      setActive(formatTime(t));
+      setTime(formatTime(t));
+    });
+  }, []);
+
+  const parsed = parseTime(time);
+
+  const apply = async (on: boolean) => {
+    setBusy(true);
+    try {
+      const ok = await setReminder(on ? parsed : null);
+      if (!ok) {
+        Alert.alert("Notifications are off", "Allow notifications for Bite in Android settings to get a reminder.");
+        setActive(null);
+      } else setActive(on && parsed ? formatTime(parsed) : null);
+    } catch (e) {
+      Alert.alert("Couldn't set the reminder", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Section
+      title="Daily reminder"
+      hint={active ? `On — a nudge every day at ${active}.` : "Off. A gentle nudge in the evening to log what you ate."}
+    >
+      <Field
+        label="Time, 24-hour"
+        value={time}
+        onChangeText={setTime}
+        placeholder="20:30"
+        keyboardType="numbers-and-punctuation"
+        maxLength={5}
+      />
+      <Button
+        title={active ? "Update reminder" : "Turn on reminder"}
+        busy={busy}
+        disabled={!parsed || (active !== null && formatTime(parsed) === active)}
+        onPress={() => apply(true)}
+      />
+      {active && <Button title="Turn off" variant="quiet" disabled={busy} onPress={() => apply(false)} />}
     </Section>
   );
 }

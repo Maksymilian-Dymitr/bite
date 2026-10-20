@@ -37,6 +37,16 @@ export async function readBase64(path: string): Promise<string> {
   return new File(path).base64();
 }
 
+/** Copies a meal photo so a repeated meal owns its own file (deleting one meal mustn't break the other). */
+export function copyPhoto(path: string | null): string | null {
+  if (!path) return null;
+  const src = new File(path);
+  if (!src.exists) return null;
+  const target = new File(dir(), `${Date.now()}.jpg`);
+  src.copy(target);
+  return target.uri;
+}
+
 export function deletePhoto(path: string | null) {
   if (!path) return;
   const f = new File(path);

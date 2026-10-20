@@ -93,10 +93,10 @@ The prompt asks for visible portions only, cooked weights, and separate items fo
 
 ## Phases
 
-1. **Log a meal** — capture, analyze, review/edit, save, Today screen. ✅ scaffolded
-2. **Progress** — 7-day bars, averages, weight entry + trend. ⚙️ basic version scaffolded
-3. **Robustness** — pending queue retry on open, backup/import, daily reminder notification, haptics. ⚙️ backup scaffolded
-4. **Speed** — favorites / repeat yesterday's meal, text-only entry, barcode scan.
+1. **Log a meal** — capture, analyze, review/edit, save, Today screen. ✅
+2. **Progress** — 7-day bars, averages, weight entry + smoothed trend. ✅
+3. **Robustness** — pending queue retry on open and on foreground (offline/rate-limit errors stay pending), backup/import, daily reminder notification, haptics. ✅
+4. **Speed** — favorites + "log again" (Add screen and meal screen), text-only entry via Gemini, barcode scan via Open Food Facts. ✅
 
 ## Done when (phase 1)
 

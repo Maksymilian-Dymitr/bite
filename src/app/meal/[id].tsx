@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { deleteMeal, replaceItems, useMeal } from "@/db/queries";
-import { runAnalysis } from "@/lib/analyze";
-import { deletePhoto } from "@/lib/photos";
+import * as Haptics from "expo-haptics";
+import { copyMeal, deleteMeal, replaceItems, setFavorite, useMeal } from "@/db/queries";
+import { runAnalysis, useAnalyzing } from "@/lib/analyze";
+import { copyPhoto, deletePhoto } from "@/lib/photos";
 import { mealLabel, timeLabel } from "@/lib/dates";
 import { fmt, rescale, sum } from "@/lib/nutrition";
 import { Button } from "@/components/Button";
@@ -32,15 +33,16 @@ export default function MealScreen() {
 
   const [items, setItems] = useState<Draft[] | null>(null);
   const [saving, setSaving] = useState(false);
-  const [retrying, setRetrying] = useState(false);
+  const analyzing = useAnalyzing(mealId);
 
   // Seed the editable draft once the meal has items (or when a retry finishes).
+  // Adjusted during render rather than in an effect, so there's no frame showing stale items.
   const sourceKey = meal ? `${meal.status}:${meal.items.map((i) => i.id).join(",")}` : "";
-  useEffect(() => {
-    if (!meal || meal.status !== "done") return;
+  const [seededFrom, setSeededFrom] = useState("");
+  if (meal?.status === "done" && sourceKey !== seededFrom) {
+    setSeededFrom(sourceKey);
     setItems(meal.items.map((i) => ({ ...i, key: newKey() })));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceKey]);
+  }
 
   const totals = useMemo(() => sum(items ?? []), [items]);
 
@@ -52,9 +54,8 @@ export default function MealScreen() {
   const setGrams = (d: Draft, g: number) => update(d.key, (x) => rescale(x, Math.max(0, Math.round(g))));
 
   const retry = async () => {
-    setRetrying(true);
-    await runAnalysis(meal.id);
-    setRetrying(false);
+    const ok = await runAnalysis(meal.id);
+    Haptics.notificationAsync(ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning);
   };
 
   const save = async () => {
@@ -64,11 +65,23 @@ export default function MealScreen() {
       meal.id,
       items.filter((d) => d.name.trim()).map(({ key, ...rest }) => ({ ...rest, name: rest.name.trim() })),
     );
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
   };
 
+  const toggleFavorite = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFavorite(meal.id, !meal.favorite);
+  };
+
+  const logAgain = async () => {
+    const copy = await copyMeal(meal.id, copyPhoto(meal.photoPath));
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.replace(`/meal/${copy.id}`);
+  };
+
   const remove = () =>
-    Alert.alert("Delete this meal?", "The photo and its items will be removed.", [
+    Alert.alert("Delete this meal?", meal.photoPath ? "The photo and its items will be removed." : "Its items will be removed.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -76,10 +89,13 @@ export default function MealScreen() {
         onPress: async () => {
           await deleteMeal(meal.id);
           deletePhoto(meal.photoPath);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           router.back();
         },
       },
     ]);
+
+  const reading = analyzing || (meal.status === "pending" && !meal.error);
 
   const addItem = () =>
     setItems((prev) => [
@@ -94,14 +110,31 @@ export default function MealScreen() {
         {meal.photoPath && (
           <Image source={{ uri: meal.photoPath }} style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 8 }} contentFit="cover" />
         )}
-        {meal.note && <Text style={[type.small, { marginTop: space.sm }]}>Note: {meal.note}</Text>}
+        {meal.note && (
+          <Text style={[meal.photoPath ? type.small : type.body, { marginTop: meal.photoPath ? space.sm : 0 }]}>
+            {meal.photoPath ? `Note: ${meal.note}` : meal.note}
+          </Text>
+        )}
+
+        {meal.status === "done" && (
+          <View style={{ flexDirection: "row", gap: space.lg, marginTop: space.md }}>
+            <Pressable onPress={toggleFavorite} hitSlop={8} accessibilityRole="button">
+              <Text style={[type.label, { color: meal.favorite ? color.readout : color.muted }]}>
+                {meal.favorite ? "★ In favorites" : "☆ Add to favorites"}
+              </Text>
+            </Pressable>
+            <Pressable onPress={logAgain} hitSlop={8} accessibilityRole="button" accessibilityHint="Logs a copy of this meal now">
+              <Text style={[type.label, { color: color.muted }]}>Log again now</Text>
+            </Pressable>
+          </View>
+        )}
 
         {meal.status !== "done" ? (
           <View style={{ marginTop: space.lg, gap: space.md }}>
-            <Text style={[type.body, { color: meal.status === "failed" ? color.over : color.muted }]}>
-              {meal.status === "pending" || retrying ? "Reading your plate…" : meal.error}
+            <Text style={[type.body, { color: meal.status === "failed" && !reading ? color.over : color.muted }]}>
+              {reading ? (meal.photoPath ? "Reading your plate…" : "Reading your description…") : meal.error}
             </Text>
-            <Button title="Retry analysis" busy={retrying || meal.status === "pending"} onPress={retry} />
+            <Button title="Retry analysis" busy={reading} onPress={retry} />
             <Button
               title="Enter items by hand"
               variant="quiet"
@@ -117,7 +150,9 @@ export default function MealScreen() {
           <>
             <View style={{ marginTop: space.lg }}>
               {items.length === 0 && (
-                <Text style={[type.body, { color: color.muted }]}>No food found in the photo. Add items by hand.</Text>
+                <Text style={[type.body, { color: color.muted }]}>
+                  {meal.photoPath ? "No food found in the photo." : "No items yet."} Add items by hand.
+                </Text>
               )}
               {items.map((d) => (
                 <ItemEditor
@@ -204,7 +239,10 @@ function ItemEditor({
 function Step({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        Haptics.selectionAsync();
+        onPress();
+      }}
       accessibilityRole="button"
       style={({ pressed }) => ({
         width: 40,
@@ -224,7 +262,11 @@ function Step({ label, onPress }: { label: string; onPress: () => void }) {
 
 function NumberField({ value, onChange, suffix }: { value: number; onChange: (n: number) => void; suffix: string }) {
   const [text, setText] = useState(String(Math.round(value)));
-  useEffect(() => setText(String(Math.round(value))), [value]);
+  const [shownValue, setShownValue] = useState(value);
+  if (value !== shownValue) {
+    setShownValue(value);
+    setText(String(Math.round(value)));
+  }
   return (
     <View
       style={{

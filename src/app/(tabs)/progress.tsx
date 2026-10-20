@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { ScrollView, Text, TextInput, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Line, Polyline, Rect, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, Line, Polyline, Rect, Text as SvgText } from "react-native-svg";
+import * as Haptics from "expo-haptics";
 import { logWeight, useDailyTotals, useGoal, useWeights } from "@/db/queries";
-import { shortDay } from "@/lib/dates";
+import { dayKey, shortDay } from "@/lib/dates";
 import { fmt } from "@/lib/nutrition";
 import { Button } from "@/components/Button";
 import { color, font, space, type } from "@/theme";
@@ -34,7 +35,7 @@ export default function Progress() {
       <Text style={[type.small, { marginTop: space.xs }]}>Averages count only days with something logged.</Text>
 
       <Text style={[type.heading, { marginTop: space.xl }]}>Weight</Text>
-      <WeightEntry />
+      <WeightEntry today={weights.find((w) => w.date === dayKey())?.kg} />
       {weights.length >= 2 ? (
         <WeightLine points={weights.map((w) => w.kg)} />
       ) : (
@@ -109,37 +110,58 @@ function WeekBars({ days, target }: { days: { day: Date; kcal: number }[]; targe
   );
 }
 
+/** Exponential moving average — smooths out day-to-day water swings so the direction is readable. */
+function trend(points: number[], alpha = 0.3) {
+  const out: number[] = [];
+  for (const p of points) out.push(out.length ? out[out.length - 1] + alpha * (p - out[out.length - 1]) : p);
+  return out;
+}
+
 function WeightLine({ points }: { points: number[] }) {
   const [width, onLayout] = useWidth();
   const H = 120;
+  const PAD = 6;
+  const smooth = trend(points);
   const min = Math.min(...points) - 0.5;
   const max = Math.max(...points) + 0.5;
-  const step = width / Math.max(1, points.length - 1);
-  const pts = points.map((p, i) => `${i * step},${H - ((p - min) / (max - min)) * H}`).join(" ");
-  const first = points[0];
-  const last = points[points.length - 1];
-  const delta = last - first;
+  const step = (width - PAD * 2) / Math.max(1, points.length - 1);
+  const x = (i: number) => PAD + i * step;
+  const y = (v: number) => PAD + (H - PAD * 2) * (1 - (v - min) / (max - min));
+  const line = smooth.map((v, i) => `${x(i)},${y(v)}`).join(" ");
+  const last = smooth[smooth.length - 1];
+  const delta = last - smooth[0];
 
   return (
     <View style={{ marginTop: space.md }}>
       <Text style={[type.body, { color: color.muted }]}>
-        <Text style={{ color: color.ink, fontFamily: font.bodySemi }}>{last.toFixed(1)} kg</Text>
+        Trend <Text style={{ color: color.ink, fontFamily: font.bodySemi }}>{last.toFixed(1)} kg</Text>
         {`, ${delta <= 0 ? "down" : "up"} ${Math.abs(delta).toFixed(1)} kg over ${points.length} entries`}
       </Text>
       <View onLayout={onLayout} style={{ height: H, marginTop: space.sm }}>
         {width > 0 && (
           <Svg width={width} height={H}>
-            <Polyline points={pts} fill="none" stroke={color.readout} strokeWidth={2.5} strokeLinejoin="round" />
+            {points.map((p, i) => (
+              <Circle key={i} cx={x(i)} cy={y(p)} r={2.5} fill={color.muted} />
+            ))}
+            <Polyline points={line} fill="none" stroke={color.readout} strokeWidth={2.5} strokeLinejoin="round" />
           </Svg>
         )}
       </View>
+      <Text style={type.small}>Dots are weigh-ins; the line is the smoothed trend.</Text>
     </View>
   );
 }
 
-function WeightEntry() {
+function WeightEntry({ today }: { today?: number }) {
   const [kg, setKg] = useState("");
   const [saved, setSaved] = useState(false);
+  // Show today's weigh-in once it loads (adjusted during render rather than in an effect).
+  const [seeded, setSeeded] = useState<number>();
+  if (today !== undefined && today !== seeded) {
+    setSeeded(today);
+    setKg(String(today));
+    setSaved(true);
+  }
   const value = Number(kg.replace(",", "."));
   const valid = isFinite(value) && value > 20 && value < 400;
 
@@ -170,6 +192,7 @@ function WeightEntry() {
         disabled={!valid || saved}
         onPress={async () => {
           await logWeight(Math.round(value * 10) / 10);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setSaved(true);
         }}
       />

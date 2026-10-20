@@ -11,6 +11,7 @@ export const meals = sqliteTable(
       .notNull()
       .default("pending"),
     error: text("error"), // last analysis error, shown on retry
+    favorite: integer("favorite", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [index("meals_eaten_at_idx").on(t.eatenAt)],
 );

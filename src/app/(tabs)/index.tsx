@@ -65,8 +65,15 @@ export default function Today() {
         </View>
       </ScrollView>
 
-      <View style={{ position: "absolute", left: space.lg, right: space.lg, bottom: space.md }}>
-        <Button title="Snap meal" onPress={() => router.push("/capture")} style={{ minHeight: 60, borderRadius: 30 }} />
+      <View style={{ position: "absolute", left: space.lg, right: space.lg, bottom: space.md, flexDirection: "row", gap: space.sm }}>
+        <Button title="Snap meal" onPress={() => router.push("/capture")} style={{ flex: 1, minHeight: 60, borderRadius: 30 }} />
+        <Button
+          title="Add"
+          variant="quiet"
+          accessibilityHint="Describe a meal, scan a barcode or log a meal again"
+          onPress={() => router.push("/add")}
+          style={{ minHeight: 60, borderRadius: 30, backgroundColor: color.counter }}
+        />
       </View>
     </View>
   );

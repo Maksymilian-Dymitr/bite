@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, View, type LayoutChangeEvent } from "react-native";
 import Svg, { Line } from "react-native-svg";
 import { color } from "@/theme";
@@ -20,7 +20,7 @@ export function ScaleTape({ eaten, target }: Props) {
   const eatenTicks = eaten / PER_TICK;
   const total = Math.min(Math.ceil(targetTicks * 1.4), Math.max(targetTicks, Math.ceil(eatenTicks)));
 
-  const anim = useRef(new Animated.Value(eatenTicks)).current;
+  const [anim] = useState(() => new Animated.Value(eatenTicks));
   const [shown, setShown] = useState(eatenTicks);
 
   useEffect(() => {

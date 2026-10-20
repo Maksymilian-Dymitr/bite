@@ -18,15 +18,14 @@ export default function Capture() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const take = async (source: "camera" | "library") => {
-    setError(null);
-    try {
-      const s = await snap(source);
-      if (s) setPhoto(s);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  };
+  const take = (source: "camera" | "library") =>
+    snap(source).then(
+      (s) => {
+        setError(null);
+        if (s) setPhoto(s);
+      },
+      (e) => setError(e instanceof Error ? e.message : String(e)),
+    );
 
   useEffect(() => {
     take("camera");

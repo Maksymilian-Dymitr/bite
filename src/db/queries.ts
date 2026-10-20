@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt, lte, or, sql } from "drizzle-orm";
 import { useLiveQuery } from "drizzle-orm/expo-sqlite";
 import { db } from "./client";
 import { goals, mealItems, meals, weights, type Meal, type MealItem, type NewMealItem } from "./schema";
@@ -77,7 +77,7 @@ export function useDailyTotals(days: number) {
       })
       .from(meals)
       .leftJoin(mealItems, eq(mealItems.mealId, meals.id))
-      .where(gte(meals.eatenAt, from))
+      .where(and(gte(meals.eatenAt, from), eq(meals.status, "done")))
       .groupBy(meals.id),
     [from],
   );
@@ -104,6 +104,38 @@ export function useWeights(limit = 60) {
   return (data ?? []).slice().reverse();
 }
 
+const signature = (m: MealWithItems) =>
+  m.items
+    .map((i) => i.name.trim().toLowerCase())
+    .sort()
+    .join("|");
+
+/** Meals worth logging again: favorites first, then distinct meals from the last 30 days, newest first. */
+export function useRepeatable() {
+  const from = startOfDay(addDays(new Date(), -30));
+  const { data } = useLiveQuery(
+    db
+      .select({ meal: meals, item: mealItems })
+      .from(meals)
+      .innerJoin(mealItems, eq(mealItems.mealId, meals.id))
+      .where(and(eq(meals.status, "done"), or(eq(meals.favorite, true), gte(meals.eatenAt, from))))
+      .orderBy(desc(meals.eatenAt), asc(mealItems.id)),
+    [from],
+  );
+  const all = groupMeals(data ?? []);
+  const seen = new Set<string>();
+  const pick = (list: MealWithItems[]) =>
+    list.filter((m) => {
+      const s = signature(m);
+      if (seen.has(s)) return false;
+      seen.add(s);
+      return true;
+    });
+  const favorites = pick(all.filter((m) => m.favorite));
+  const recent = pick(all.filter((m) => !m.favorite)).slice(0, 15);
+  return { favorites, recent };
+}
+
 export function usePendingMeals() {
   const { data } = useLiveQuery(
     db.select().from(meals).where(sql`${meals.status} != 'done'`).orderBy(asc(meals.eatenAt)),
@@ -128,6 +160,39 @@ export async function setMealResult(mealId: number, items: Omit<NewMealItem, "me
 
 export async function setMealFailed(mealId: number, error: string) {
   await db.update(meals).set({ status: "failed", error }).where(eq(meals.id, mealId));
+}
+
+/** Analysis hit a temporary problem (offline, rate limit): stay pending so it's retried, but remember why. */
+export async function setMealWaiting(mealId: number, error: string) {
+  await db.update(meals).set({ status: "pending", error }).where(eq(meals.id, mealId));
+}
+
+/** A meal that needs no analysis, e.g. a scanned product. */
+export async function createMealWithItems(input: { eatenAt: number; note: string | null; items: Omit<NewMealItem, "mealId">[] }) {
+  return db.transaction(async (tx) => {
+    const [meal] = await tx
+      .insert(meals)
+      .values({ eatenAt: input.eatenAt, note: input.note, photoPath: null, status: "done" })
+      .returning();
+    if (input.items.length) await tx.insert(mealItems).values(input.items.map((i) => ({ ...i, mealId: meal.id })));
+    return meal;
+  });
+}
+
+/** Logs a copy of a meal (its items as they were saved) at `eatenAt`. The caller copies the photo file. */
+export async function copyMeal(mealId: number, photoPath: string | null, eatenAt = Date.now()) {
+  const src = await getMeal(mealId);
+  if (!src) throw new Error("That meal no longer exists.");
+  const items = await db.select().from(mealItems).where(eq(mealItems.mealId, mealId)).orderBy(asc(mealItems.id));
+  return db.transaction(async (tx) => {
+    const [meal] = await tx.insert(meals).values({ eatenAt, photoPath, note: src.note, status: "done" }).returning();
+    if (items.length) await tx.insert(mealItems).values(items.map(({ id, ...i }) => ({ ...i, mealId: meal.id })));
+    return meal;
+  });
+}
+
+export async function setFavorite(mealId: number, favorite: boolean) {
+  await db.update(meals).set({ favorite }).where(eq(meals.id, mealId));
 }
 
 export async function updateMealNote(mealId: number, note: string | null) {
