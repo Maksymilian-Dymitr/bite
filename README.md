@@ -16,7 +16,8 @@ In the app: **Settings → Gemini** → paste a key from aistudio.google.com, th
 ## Install as a real app (APK)
 
 ```bash
-npx eas-cli@latest login
+npm install -g eas-cli # once (npx eas-cli hits an npm 11.6 lock bug on Windows)
+eas login
 npm run build:apk      # EAS cloud build → download link for an .apk
 ```
 

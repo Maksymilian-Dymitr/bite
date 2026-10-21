@@ -44,7 +44,7 @@
     "android": "expo start --android",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "build:apk": "npx eas-cli@latest build -p android --profile preview",
+    "build:apk": "eas build -p android --profile preview",
     "lint": "expo lint"
   },
   "private": true

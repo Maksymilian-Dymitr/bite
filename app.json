@@ -17,7 +17,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.maksy.bite"
+      "package": "com.maksy.bite",
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -40,7 +41,8 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Bite uses the camera to photograph your meals."
+          "cameraPermission": "Bite uses the camera to photograph your meals.",
+          "microphonePermission": false
         }
       ],
       [
@@ -57,6 +59,12 @@
     "backgroundColor": "#E9ECE8",
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f45c09af-6ef9-4d13-8ac1-b79d36b91403"
+      }
+    },
+    "owner": "screamsinmeow"
   }
 }
