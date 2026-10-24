@@ -3,6 +3,7 @@ import { Alert, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, Vi
 import { Image } from "expo-image";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { copyMeal, deleteMeal, replaceItems, setFavorite, useMeal } from "@/db/queries";
 import { runAnalysis, useAnalyzing } from "@/lib/analyze";
 import { copyPhoto, deletePhoto } from "@/lib/photos";
@@ -30,6 +31,7 @@ export default function MealScreen() {
   const mealId = Number(id);
   const meal = useMeal(mealId);
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [items, setItems] = useState<Draft[] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -106,7 +108,7 @@ export default function MealScreen() {
   return (
     <KeyboardAvoidingView behavior="height" style={{ flex: 1, backgroundColor: color.counter }}>
       <Stack.Screen options={{ title: `${mealLabel(meal.eatenAt)}, ${timeLabel(meal.eatenAt)}` }} />
-      <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: space.xl }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: insets.bottom + space.xl }} keyboardShouldPersistTaps="handled">
         {meal.photoPath && (
           <Image source={{ uri: meal.photoPath }} style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 8 }} contentFit="cover" />
         )}
