@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="brand/wordmark.png" alt="Bite" width="360">
+</p>
+
 # Bite
 
 Snap a meal → Gemini estimates it → correct the grams → logged. Local-only Android app (Expo SDK 58).
